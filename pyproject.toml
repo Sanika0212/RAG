@@ -1,0 +1,153 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "self-healing-rag"
+version = "0.1.0"
+description = "Self-Healing RAG Engine with Confidence-Calibrated Retrieval and Agentic Self-Correction"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "RAG Team" }
+]
+keywords = ["rag", "retrieval", "llm", "medical-qa", "self-correction"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    # Web framework
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "slowapi>=0.1.9",
+
+    # Database
+    "asyncpg>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0.25",
+    "pgvector>=0.2.4",
+    "alembic>=1.13.0",
+
+    # Embeddings & ML
+    "sentence-transformers>=2.3.0",
+    "FlagEmbedding>=1.2.0",
+    "torch>=2.1.0",
+    "transformers>=4.37.0",
+
+    # LLM
+    "anthropic>=0.18.0",
+
+    # Agents
+    "langgraph>=0.0.26",
+    "langchain-core>=0.1.20",
+
+    # Document parsing
+    "unstructured[pdf,docx,md]>=0.12.0",
+    "python-multipart>=0.0.6",
+    "pypdf>=4.0.0",
+    "python-docx>=1.1.0",
+
+    # NLI & Reranking
+    "scipy>=1.12.0",
+    "numpy>=1.26.0",
+
+    # Utilities
+    "httpx>=0.26.0",
+    "tenacity>=8.2.0",
+    "structlog>=24.1.0",
+    "python-dotenv>=1.0.0",
+    "tiktoken>=0.5.0",
+
+    # Observability (OpenTelemetry)
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-exporter-otlp>=1.20.0",
+    "opentelemetry-instrumentation-fastapi>=0.41b0",
+    "opentelemetry-instrumentation-httpx>=0.41b0",
+    "opentelemetry-instrumentation-sqlalchemy>=0.41b0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-xdist>=3.5.0",
+    "mypy>=1.8.0",
+    "ruff>=0.1.14",
+    "pre-commit>=3.6.0",
+    "httpx>=0.26.0",
+]
+eval = [
+    "ragas>=0.1.0",
+    "datasets>=2.16.0",
+    "pandas>=2.2.0",
+    "matplotlib>=3.8.0",
+    "seaborn>=0.13.0",
+]
+
+[project.scripts]
+rag-server = "src.api.main:run_server"
+rag-ingest = "scripts.ingest:main"
+rag-eval = "scripts.evaluate:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+    "B905",  # zip without explicit strict
+]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["ARG001"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --cov=src --cov-report=term-missing"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
