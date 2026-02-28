@@ -119,6 +119,9 @@ Thumbs.db
 # Evaluation outputs
 eval_results/
 
+# Task files (local only)
+SANIKA_TASKS.md
+
 # Node.js (frontend)
 node_modules/
 .next/
