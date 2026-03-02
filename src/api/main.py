@@ -1048,6 +1048,194 @@ async def search(
     }
 
 
+# ============================================================================
+# Settings Endpoints (for user-configurable API keys and models)
+# ============================================================================
+
+class UserSettingsRequest(BaseModel):
+    """User settings from frontend."""
+    anthropicKey: Optional[str] = None
+    googleKey: Optional[str] = None
+    mercuryKey: Optional[str] = None
+    openaiKey: Optional[str] = None
+    ollamaEndpoint: Optional[str] = None
+    ollamaModel: Optional[str] = None
+    agentProvider: Optional[str] = None
+    agentModel: Optional[str] = None
+    generationProvider: Optional[str] = None
+    generationModel: Optional[str] = None
+    mercuryReasoningEffort: Optional[str] = None
+    useLocalModels: Optional[bool] = None
+
+
+class ValidateKeyRequest(BaseModel):
+    """Request to validate an API key."""
+    provider: str
+    key: str
+
+
+@app.post("/settings/validate-key")
+async def validate_api_key(body: ValidateKeyRequest):
+    """Validate an API key for a provider."""
+    import httpx
+
+    provider = body.provider.lower()
+    key = body.key
+
+    if not key:
+        return {"valid": False, "error": "No key provided"}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            if provider == "anthropic":
+                # Test Anthropic key
+                res = await client.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={
+                        "x-api-key": key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": "claude-haiku-4-5-20251001",
+                        "max_tokens": 1,
+                        "messages": [{"role": "user", "content": "Hi"}],
+                    },
+                )
+                # 200 = valid, 401 = invalid key, other = might still be valid
+                if res.status_code == 401:
+                    return {"valid": False, "error": "Invalid API key"}
+                return {"valid": True}
+
+            elif provider == "google":
+                # Test Google/Gemini key
+                res = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}",
+                    json={"contents": [{"parts": [{"text": "Hi"}]}]},
+                )
+                if res.status_code == 400 and "API_KEY_INVALID" in res.text:
+                    return {"valid": False, "error": "Invalid API key"}
+                return {"valid": True}
+
+            elif provider == "mercury":
+                # Test Mercury key
+                res = await client.post(
+                    "https://api.inceptionlabs.ai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "mercury-2",
+                        "messages": [{"role": "user", "content": "Hi"}],
+                        "max_tokens": 1,
+                    },
+                )
+                if res.status_code == 401:
+                    return {"valid": False, "error": "Invalid API key"}
+                return {"valid": True}
+
+            elif provider == "openai":
+                # Test OpenAI key
+                res = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": "gpt-4o-mini",
+                        "messages": [{"role": "user", "content": "Hi"}],
+                        "max_tokens": 1,
+                    },
+                )
+                if res.status_code == 401:
+                    return {"valid": False, "error": "Invalid API key"}
+                return {"valid": True}
+
+            else:
+                return {"valid": False, "error": f"Unknown provider: {provider}"}
+
+    except httpx.TimeoutException:
+        return {"valid": False, "error": "Timeout validating key"}
+    except Exception as e:
+        logger.error(f"Key validation error: {e}")
+        return {"valid": False, "error": str(e)}
+
+
+@app.post("/settings/user")
+async def save_user_settings(body: UserSettingsRequest):
+    """Save user settings (for future use with user accounts)."""
+    # For now, just acknowledge receipt
+    # In production, save to user's profile in database
+    logger.info("User settings received", provider=body.agentProvider)
+    return {"status": "saved"}
+
+
+@app.get("/settings/providers")
+async def list_providers():
+    """List available LLM providers and their status."""
+    providers = []
+
+    # Check which providers are configured server-side
+    if settings.anthropic_api_key.get_secret_value():
+        providers.append({
+            "id": "anthropic",
+            "name": "Anthropic (Claude)",
+            "configured": True,
+            "models": ["claude-opus-4-5-20251101", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"],
+        })
+    else:
+        providers.append({
+            "id": "anthropic",
+            "name": "Anthropic (Claude)",
+            "configured": False,
+            "models": ["claude-opus-4-5-20251101", "claude-sonnet-4-5-20250929", "claude-haiku-4-5-20251001"],
+        })
+
+    if settings.google_api_key.get_secret_value():
+        providers.append({
+            "id": "google",
+            "name": "Google (Gemini)",
+            "configured": True,
+            "models": ["gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-flash"],
+        })
+    else:
+        providers.append({
+            "id": "google",
+            "name": "Google (Gemini)",
+            "configured": False,
+            "models": ["gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-flash"],
+        })
+
+    if settings.mercury_api_key.get_secret_value():
+        providers.append({
+            "id": "mercury",
+            "name": "Mercury 2",
+            "configured": True,
+            "models": ["mercury-2"],
+            "badge": "10x Faster",
+        })
+    else:
+        providers.append({
+            "id": "mercury",
+            "name": "Mercury 2",
+            "configured": False,
+            "models": ["mercury-2"],
+            "badge": "10x Faster",
+        })
+
+    providers.append({
+        "id": "ollama",
+        "name": "Ollama (Local)",
+        "configured": True,  # Always available if user runs it
+        "models": ["llama3.2", "llama3.1", "mistral", "mixtral"],
+        "local": True,
+    })
+
+    return {"providers": providers}
+
+
 def run_server():
     """Run the FastAPI server."""
     import uvicorn

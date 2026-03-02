@@ -11,6 +11,14 @@
     <a href="https://anthropic.com/"><img src="https://img.shields.io/badge/Claude-D97757?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude" /></a>
   </p>
 
+  <p>
+    <a href="#getting-started">Getting Started</a> •
+    <a href="#key-features">Features</a> •
+    <a href="#api-endpoints">API</a> •
+    <a href="#bring-your-own-models">BYOM</a> •
+    <a href="#contributing">Contributing</a>
+  </p>
+
 </div>
 
 ---
@@ -27,6 +35,7 @@ This RAG engine goes beyond basic vector retrieval by implementing a **self-heal
 | Hopes for good results | Measures retrieval quality with multi-signal scoring |
 | Hallucinates when context is poor | Abstains or self-corrects when uncertain |
 | Single retrieval strategy | Hybrid search with fallback strategies |
+| One model fits all | **Bring your own models** - use any provider |
 
 ---
 
@@ -94,6 +103,25 @@ A dark-mode UI with cinematic reasoning visualization:
 - **SSE streaming** with typewriter text reveal
 - **Inline citations** with hover tooltips showing source excerpts
 - **Drag-and-drop** document upload
+- **Settings panel** for configuring API keys and model selection
+
+### Bring Your Own Models
+
+Configure your own API keys and models through the Settings UI (click ⚙️ in header):
+
+| Provider | Models | Use Case |
+|----------|--------|----------|
+| **Anthropic** | Claude Opus, Sonnet, Haiku | Agents, Generation |
+| **Google** | Gemini 2.0 Flash/Pro | Fast generation |
+| **Mercury 2** | mercury-2 | 10x faster inference |
+| **OpenAI** | GPT-4o, GPT-4o-mini | Agents, Generation |
+| **Ollama** | Llama 3.2, Mistral, etc. | Local/private models |
+
+**Features:**
+- Per-task model selection (different models for agents vs generation)
+- API key validation before saving
+- Settings stored locally in browser
+- Zero config - works with server-side keys or user-provided keys
 
 ---
 
@@ -106,6 +134,9 @@ A dark-mode UI with cinematic reasoning visualization:
 │  │  Workspace  │  │   Chat Input    │  │   Reasoning Trace      │  │
 │  │  Selector   │  │   + Streaming   │  │   Animation            │  │
 │  └─────────────┘  └─────────────────┘  └─────────────────────────┘  │
+│  ┌─────────────────────────────────────────────────────────────────┐│
+│  │                    Settings Modal (API Keys, Models)            ││
+│  └─────────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────────┘
                                 │
                                 │ SSE / REST
@@ -116,6 +147,9 @@ A dark-mode UI with cinematic reasoning visualization:
 │  │  Ingestion  │  │   RAG Agent     │  │   Search Engine         │  │
 │  │  Pipeline   │  │   (LangGraph)   │  │   (Hybrid + Rerank)     │  │
 │  └─────────────┘  └─────────────────┘  └─────────────────────────┘  │
+│  ┌─────────────────────────────────────────────────────────────────┐│
+│  │              LLM Providers (Claude, Gemini, Mercury, Ollama)    ││
+│  └─────────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -131,7 +165,7 @@ A dark-mode UI with cinematic reasoning visualization:
 
 | Layer | Technology |
 |-------|------------|
-| **LLM** | Claude (agents), Gemini (generation) |
+| **LLM** | Claude, Gemini, Mercury 2, OpenAI, Ollama |
 | **Embeddings** | BAAI/bge-m3 (1024-dim dense) |
 | **Reranker** | BAAI/bge-reranker-v2-m3 |
 | **Orchestration** | LangGraph state machine |
@@ -149,7 +183,7 @@ A dark-mode UI with cinematic reasoning visualization:
 - Python 3.11+
 - Node.js 18+
 - PostgreSQL with pgvector extension (or [Neon](https://neon.tech) cloud)
-- API keys: Anthropic (Claude), Google (Gemini)
+- API keys: Anthropic (Claude), Google (Gemini) - or configure your own in UI
 
 ### Backend Setup
 
@@ -194,17 +228,40 @@ Open **http://localhost:3000** to access the UI.
 
 ## API Endpoints
 
+### Core Endpoints
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check with DB stats |
 | `POST` | `/ingest` | Upload and process a document |
 | `POST` | `/query` | RAG query with full pipeline |
 | `POST` | `/query/stream` | Streaming query via SSE |
+| `POST` | `/search` | Direct search without generation |
+
+### Document Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | `GET` | `/documents` | List all documents |
 | `DELETE` | `/documents/{id}` | Delete a document |
+
+### Workspace Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | `GET` | `/workspaces` | List workspaces |
 | `POST` | `/workspaces` | Create a workspace |
-| `POST` | `/search` | Direct search without generation |
+| `GET` | `/workspaces/{id}` | Get workspace details |
+| `PUT` | `/workspaces/{id}` | Update a workspace |
+| `DELETE` | `/workspaces/{id}` | Delete a workspace |
+
+### Settings & Providers
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/settings/providers` | List available LLM providers |
+| `POST` | `/settings/validate-key` | Validate an API key |
+| `POST` | `/settings/user` | Save user settings |
 
 ### Example Query
 
@@ -241,17 +298,27 @@ RAG/
 │   │   └── confidence.py # Multi-signal scoring
 │   ├── ingestion/        # Document processing
 │   │   ├── parser.py     # PDF/DOCX/MD parsing
-│   │   ├── chunker.py    # Hierarchical chunking
+│   │   ├── chunker.py    # Chunking strategies
 │   │   └── pipeline.py   # Orchestration
 │   ├── generation/       # Response generation
 │   ├── validation/       # Claim validation (NLI)
 │   ├── embeddings/       # BGE-M3 embeddings
+│   ├── providers/        # LLM provider integrations
+│   │   └── mercury.py    # Mercury 2 client
 │   ├── database/         # SQLAlchemy models
 │   └── config/           # Settings and constants
 ├── frontend/
 │   └── src/
 │       ├── app/          # Next.js pages
 │       └── components/   # React components
+│           ├── Sidebar.tsx
+│           ├── ChatInput.tsx
+│           ├── WorkspaceSelector.tsx
+│           ├── SettingsModal.tsx    # API key & model config
+│           ├── ReasoningTrace.tsx
+│           └── ...
+├── docs/                 # Documentation
+│   └── MERCURY_2_ANALYSIS.md
 ├── tests/                # Unit and integration tests
 └── scripts/              # CLI utilities
 ```
@@ -260,15 +327,41 @@ RAG/
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `ANTHROPIC_API_KEY` | Yes | Claude API key |
-| `GOOGLE_API_KEY` | Yes | Gemini API key |
-| `EMBEDDING_MODEL` | No | Default: `BAAI/bge-m3` |
-| `EMBEDDING_DEVICE` | No | `cpu`, `cuda`, or `mps` |
-| `AGENT_MODEL` | No | Default: `claude-haiku-4-5-20251001` |
-| `GENERATION_MODEL` | No | Default: `gemini-2.0-flash` |
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `ANTHROPIC_API_KEY` | Claude API key |
+| `GOOGLE_API_KEY` | Gemini API key |
+
+### Optional
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EMBEDDING_MODEL` | `BAAI/bge-m3` | Embedding model |
+| `EMBEDDING_DEVICE` | `cpu` | `cpu`, `cuda`, or `mps` |
+| `AGENT_MODEL` | `claude-haiku-4-5-20251001` | Model for agents |
+| `GENERATION_MODEL` | `gemini-2.0-flash` | Model for generation |
+
+### Mercury 2 (10x Faster Inference)
+
+[Mercury 2](https://www.inceptionlabs.ai/blog/introducing-mercury-2) from Inception Labs uses diffusion-based parallel generation to achieve **~1000 tokens/second** - approximately 10x faster than Claude Haiku.
+
+| Variable | Description |
+|----------|-------------|
+| `MERCURY_API_KEY` | Your Inception Labs API key ([get one here](https://platform.inceptionlabs.ai)) |
+| `USE_MERCURY_FOR_AGENTS` | Set `true` to use Mercury for agent loops |
+| `USE_MERCURY_FOR_GENERATION` | Set `true` to use Mercury for response generation |
+| `MERCURY_REASONING_EFFORT` | `low` (faster) or `high` (better quality) |
+
+**Performance comparison:**
+
+| Model | Speed | Cost (per 1M output) |
+|-------|-------|---------------------|
+| Mercury 2 | ~1000 tok/s | $0.75 |
+| Claude Haiku | ~89 tok/s | $1.25 |
+| Gemini Flash | ~150 tok/s | $0.30 |
 
 ---
 
@@ -292,8 +385,18 @@ pytest tests/unit/test_confidence.py -v
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+See task files for contribution ideas:
+- `SANIKA_TASKS.md` - Frontend & simple backend tasks
+- `VAISHAK_TASKS.md` - Advanced RAG & infrastructure tasks
+
 ---
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+  <p>Built with ❤️ </p>
+</div>

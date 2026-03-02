@@ -9,7 +9,8 @@ import {
   Activity,
   AlertCircle,
   Clock,
-  MessageSquare
+  MessageSquare,
+  Settings
 } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import ChatInput from '@/components/ChatInput';
@@ -18,6 +19,7 @@ import StreamingResponse from '@/components/StreamingResponse';
 import ReasoningTrace from '@/components/ReasoningTrace';
 import { ResponseWithCitations } from '@/components/CitationCard';
 import WorkspaceSelector, { Workspace } from '@/components/WorkspaceSelector';
+import SettingsModal, { useSettings } from '@/components/SettingsModal';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -90,6 +92,10 @@ export default function Home() {
 
   // Workspace state
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
+
+  // Settings state
+  const [showSettings, setShowSettings] = useState(false);
+  const userSettings = useSettings();
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -410,8 +416,20 @@ export default function Home() {
             >
               {showTrace ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
             </button>
+
+            {/* Settings */}
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2 rounded-lg hover:bg-[rgba(255,255,255,0.05)] text-gray-400 hover:text-white transition-all"
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
           </div>
         </header>
+
+        {/* Settings Modal */}
+        <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
         {/* Chat Area */}
         <div className="flex-1 flex overflow-hidden">

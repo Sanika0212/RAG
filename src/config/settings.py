@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     generation_model: str = "gemini-2.0-flash"  # Fast and capable
     validation_model: str = "gemini-2.0-flash"  # For claim extraction
 
+    # LLM - Mercury 2 (optional, for 10x faster inference)
+    # Get API key at: https://platform.inceptionlabs.ai
+    mercury_api_key: SecretStr = Field(
+        default=SecretStr(""),
+        description="Inception Labs API key for Mercury 2 (optional)",
+    )
+    mercury_model: str = "mercury-2"
+    mercury_reasoning_effort: Literal["low", "high"] = "low"  # low=faster, high=better quality
+    use_mercury_for_agents: bool = False  # Use Mercury 2 for agent loops
+    use_mercury_for_generation: bool = False  # Use Mercury 2 for response generation
+
     max_tokens: int = 4096
     temperature: float = 0.1
 

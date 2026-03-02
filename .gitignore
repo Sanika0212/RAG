@@ -121,6 +121,20 @@ eval_results/
 
 # Task files (local only)
 SANIKA_TASKS.md
+VAISHAK_TASKS.md
+
+# Local planning/notes files
+CONTEXT.md
+DEV_NOTES.md
+EMBEDDING_REVIEW.md
+FRONTEND_AESTHETIC_PLAN.md
+PRODUCTION_PLAN.md
+PROJECT_SHOWCASE.md
+RAG System Architecture Notes.md
+
+# Docker (not used)
+docker/
+docker-compose.yml
 
 # Node.js (frontend)
 node_modules/
