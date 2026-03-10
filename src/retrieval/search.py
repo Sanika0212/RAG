@@ -149,8 +149,8 @@ class HybridSearcher:
         # Build query with cosine distance
         embedding_list = query_embedding.tolist()
 
-        # Base query using pgvector cosine distance operator
-        query = text("""
+        # Build query string with conditional clauses
+        query_str = """
             SELECT
                 c.id as chunk_id,
                 c.document_id,
@@ -169,30 +169,29 @@ class HybridSearcher:
             LEFT JOIN chunk_metadata cm ON c.id = cm.chunk_id
             WHERE d.is_active = true
             AND c.embedding IS NOT NULL
-        """)
+        """
 
         # Add tenant filter (RBAC)
         if tenant_id:
-            query = text(str(query) + " AND d.tenant_id = :tenant_id")
+            query_str += " AND d.tenant_id = :tenant_id"
 
         # Add workspace filter
         if workspace_id:
-            query = text(str(query) + " AND d.workspace_id = :workspace_id")
+            query_str += " AND d.workspace_id = :workspace_id"
 
         # Add document filter
         if document_ids:
-            query = text(str(query) + " AND c.document_id = ANY(:doc_ids)")
+            query_str += " AND c.document_id = ANY(:doc_ids)"
 
         # Add metadata filters
         if filters:
             if filters.get("topic_tags"):
-                query = text(str(query) + " AND cm.topic_tags && :topic_tags")
+                query_str += " AND cm.topic_tags && :topic_tags"
             if filters.get("difficulty_level"):
-                query = text(str(query) + " AND cm.difficulty_level = :difficulty")
+                query_str += " AND cm.difficulty_level = :difficulty"
 
-        query = text(str(query) + " ORDER BY c.embedding <=> :embedding LIMIT :limit")
+        query_str += " ORDER BY c.embedding <=> :embedding LIMIT :limit"
 
-        # Execute query
         params = {"embedding": str(embedding_list), "limit": top_k}
         if tenant_id:
             params["tenant_id"] = tenant_id
@@ -206,7 +205,8 @@ class HybridSearcher:
             if filters.get("difficulty_level"):
                 params["difficulty"] = filters["difficulty_level"]
 
-        result = await session.execute(query, params)
+        query = text(query_str).bindparams(**params)
+        result = await session.execute(query)
         rows = result.fetchall()
 
         return [
@@ -240,7 +240,7 @@ class HybridSearcher:
     ) -> list[SearchResult]:
         """Perform full-text keyword search using PostgreSQL tsvector."""
         # Build tsquery from natural language query
-        query_sql = text("""
+        query_str = """
             SELECT
                 c.id as chunk_id,
                 c.document_id,
@@ -258,23 +258,21 @@ class HybridSearcher:
             LEFT JOIN chunk_metadata cm ON c.id = cm.chunk_id
             WHERE d.is_active = true
             AND c.search_vector @@ plainto_tsquery('english', :query)
-        """)
+        """
 
         # Add tenant filter (RBAC)
         if tenant_id:
-            query_sql = text(str(query_sql) + " AND d.tenant_id = :tenant_id")
+            query_str += " AND d.tenant_id = :tenant_id"
 
         # Add workspace filter
         if workspace_id:
-            query_sql = text(str(query_sql) + " AND d.workspace_id = :workspace_id")
+            query_str += " AND d.workspace_id = :workspace_id"
 
         # Add document filter
         if document_ids:
-            query_sql = text(str(query_sql) + " AND c.document_id = ANY(:doc_ids)")
+            query_str += " AND c.document_id = ANY(:doc_ids)"
 
-        query_sql = text(
-            str(query_sql) + " ORDER BY score DESC LIMIT :limit"
-        )
+        query_str += " ORDER BY score DESC LIMIT :limit"
 
         params = {"query": query, "limit": top_k}
         if tenant_id:
@@ -284,7 +282,8 @@ class HybridSearcher:
         if document_ids:
             params["doc_ids"] = [str(d) for d in document_ids]
 
-        result = await session.execute(query_sql, params)
+        query_sql = text(query_str).bindparams(**params)
+        result = await session.execute(query_sql)
         rows = result.fetchall()
 
         return [
@@ -323,7 +322,7 @@ class HybridSearcher:
 
         # Query chunks that have hypothetical questions and compute similarity
         # Note: This is a simplified approach; for production, store HQ embeddings separately
-        query = text("""
+        query_str = """
             WITH hq_similarities AS (
                 SELECT
                     c.id as chunk_id,
@@ -337,7 +336,7 @@ class HybridSearcher:
                     cm.hypothetical_questions,
                     -- Compute max similarity across HQ embeddings
                     (
-                        SELECT MAX(1 - (hq_vec::vector <=> :embedding::vector))
+                        SELECT MAX(1 - (hq_vec::vector <=> cast(:embedding as vector)))
                         FROM jsonb_array_elements(cm.hq_embeddings) as hq_vec
                         WHERE cm.hq_embeddings IS NOT NULL
                     ) as max_hq_score
@@ -348,41 +347,40 @@ class HybridSearcher:
                 WHERE d.is_active = true
                 AND cm.hq_embeddings IS NOT NULL
                 AND jsonb_array_length(cm.hq_embeddings) > 0
+        """
+
+        # Add tenant filter (RBAC)
+        if tenant_id:
+            query_str += " AND d.tenant_id = :tenant_id"
+
+        # Add workspace filter
+        if workspace_id:
+            query_str += " AND d.workspace_id = :workspace_id"
+
+        # Add document filter
+        if document_ids:
+            query_str += " AND c.document_id = ANY(:doc_ids)"
+
+        query_str += """
             )
             SELECT *
             FROM hq_similarities
             WHERE max_hq_score IS NOT NULL
             ORDER BY max_hq_score DESC
             LIMIT :limit
-        """)
+        """
 
         params = {"embedding": str(embedding_list), "limit": top_k}
-
-        # Add tenant filter (RBAC)
         if tenant_id:
-            query = text(str(query).replace(
-                "WHERE d.is_active = true",
-                "WHERE d.is_active = true AND d.tenant_id = :tenant_id"
-            ))
             params["tenant_id"] = tenant_id
-
-        # Add workspace filter
         if workspace_id:
-            query = text(str(query).replace(
-                "WHERE d.is_active = true",
-                "WHERE d.is_active = true AND d.workspace_id = :workspace_id"
-            ))
             params["workspace_id"] = workspace_id
-
         if document_ids:
-            query = text(str(query).replace(
-                "WHERE d.is_active = true",
-                "WHERE d.is_active = true AND c.document_id = ANY(:doc_ids)"
-            ))
             params["doc_ids"] = [str(d) for d in document_ids]
 
         try:
-            result = await session.execute(query, params)
+            query = text(query_str).bindparams(**params)
+            result = await session.execute(query)
             rows = result.fetchall()
         except Exception as e:
             # HyDE search might fail if no HQ embeddings exist
